@@ -14,6 +14,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# 📊 KI-Auswertung Wirtschaftsdaten
 def interpret_macro_event(event):
     try:
         actual_val = float(event['actual'].replace('%', '').replace(',', '.'))
@@ -27,13 +28,18 @@ def interpret_macro_event(event):
     except:
         return "❓ Keine Bewertung möglich."
 
+# 🧠 KI-Auswertung Earnings
 def interpret_earnings(event):
     try:
         eps_actual = float(event['eps_actual'].replace(',', '.'))
         eps_est = float(event['eps_estimate'].replace(',', '.'))
         rev_actual = float(event['revenue_actual'].replace(',', '.').replace(' Mrd', ''))
         rev_est = float(event['revenue_estimate'].replace(',', '.').replace(' Mrd', ''))
-        if eps_diff := eps_actual - eps_est > 0 and rev_diff := rev_actual - rev_est > 0:
+
+        eps_diff = eps_actual - eps_est
+        rev_diff = rev_actual - rev_est
+
+        if eps_diff > 0 and rev_diff > 0:
             return "🟢 Positiv – Gewinn und Umsatz über den Erwartungen."
         elif eps_diff < 0 and rev_diff < 0:
             return "🔴 Negativ – Gewinn und Umsatz unter den Erwartungen."
@@ -42,6 +48,7 @@ def interpret_earnings(event):
     except:
         return "❓ Keine Bewertung möglich."
 
+# ✅ Bot ready
 @bot.event
 async def on_ready():
     print(f"✅ Bot online als {bot.user}")
@@ -49,6 +56,7 @@ async def on_ready():
     live_updates.start()
     live_earnings.start()
 
+# 📅 Wirtschaftskalender (22 Uhr)
 @tasks.loop(time=time(hour=22, minute=0, tzinfo=ZoneInfo("Europe/Berlin")))
 async def daily_summary():
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
@@ -56,7 +64,7 @@ async def daily_summary():
 
     embed = discord.Embed(
         title="📅 Wirtschaftskalender für Morgen",
-        description="Mit Veröffentlichungszeit & Datum",
+        description="Mit Datum & Uhrzeit",
         color=0x3498db
     )
 
@@ -68,11 +76,17 @@ async def daily_summary():
 
     if germany:
         embed.add_field(name="🇩🇪 Deutschland", value="\n".join([format_event(e) for e in germany]), inline=False)
+    else:
+        embed.add_field(name="🇩🇪 Deutschland", value="🔔 Keine Termine.", inline=False)
+
     if usa:
         embed.add_field(name="🇺🇸 USA", value="\n".join([format_event(e) for e in usa]), inline=False)
+    else:
+        embed.add_field(name="🇺🇸 USA", value="🔔 Keine Termine.", inline=False)
 
     await channel.send(embed=embed)
 
+# 📡 Wirtschaftsdaten live
 @tasks.loop(minutes=1)
 async def live_updates():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -80,9 +94,9 @@ async def live_updates():
         return
 
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
-    today_events = get_investing_calendar(for_tomorrow=False)
+    events = get_investing_calendar(for_tomorrow=False)
 
-    for event in today_events:
+    for event in events:
         identifier = (event['time'], event['title'])
         if event['actual'] and identifier not in posted_events:
             flag = "🇩🇪" if event['country'] == "germany" else "🇺🇸"
@@ -95,9 +109,11 @@ async def live_updates():
             )
             embed.add_field(name="Ergebnis", value=f"Ist: {event['actual']} | Erwartet: {event['forecast']} | Vorher: {event['previous']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=sentiment, inline=False)
+
             await channel.send(embed=embed)
             posted_events.add(identifier)
 
+# 💰 Earnings live
 @tasks.loop(minutes=1)
 async def live_earnings():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -120,15 +136,23 @@ async def live_earnings():
             embed.add_field(name="Ergebnis", value=f"EPS: {event['eps_actual']} vs {event['eps_estimate']}", inline=False)
             embed.add_field(name="Umsatz", value=f"{event['revenue_actual']} vs {event['revenue_estimate']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=sentiment, inline=False)
+
             await channel.send(embed=embed)
             posted_earnings.add(identifier)
 
+# 🔧 Optional: Testbefehl
+@bot.command(name="ping")
+async def ping(ctx):
+    await ctx.send("🏓 Pong!")
+
+# 🟢 Start
 if __name__ == "__main__":
     try:
         from dotenv import load_dotenv
         load_dotenv()
     except:
         pass
+
     if not DISCORD_TOKEN:
         raise ValueError("❌ DISCORD_TOKEN fehlt!")
     bot.run(DISCORD_TOKEN)
