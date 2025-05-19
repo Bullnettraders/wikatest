@@ -86,7 +86,7 @@ async def daily_summary():
     if usa:
         embed.add_field(name="🇺🇸 USA", value="\n".join([format_event(e) for e in usa]), inline=False)
 
-    await channel.send(embed=embed)
+    await channel.send(embed=embed, delete_after=604800)
 
 @tasks.loop(minutes=1)
 async def live_updates():
@@ -108,7 +108,7 @@ async def live_updates():
             )
             embed.add_field(name="Ergebnis", value=f"Ist: {event['actual']} | Erwartet: {event['forecast']} | Vorher: {event['previous']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=interpret_macro_event(event), inline=False)
-            await channel.send(embed=embed)
+            await channel.send(embed=embed, delete_after=604800)
             posted_events.add(identifier)
 
 @tasks.loop(minutes=1)
@@ -132,7 +132,7 @@ async def live_earnings():
             embed.add_field(name="Ergebnis", value=f"EPS: {event['eps_actual']} vs {event['eps_estimate']}", inline=False)
             embed.add_field(name="Umsatz", value=f"{event['revenue_actual']} vs {event['revenue_estimate']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=interpret_earnings(event), inline=False)
-            await channel.send(embed=embed)
+            await channel.send(embed=embed, delete_after=604800)
 
 @tasks.loop(minutes=1)
 async def remind_important_events():
@@ -154,7 +154,7 @@ async def remind_important_events():
         if 240 <= diff <= 360 and identifier not in posted_events:
             channel = bot.get_channel(CHANNEL_ID_CALENDAR)
             msg = f"⏰ **In 5 Minuten:** {event['title']} ({event['country'].title()}) um {event['time']} Uhr!"
-            await channel.send(msg)
+            await channel.send(msg, delete_after=604800)
             posted_events.add(identifier)
 
 @bot.command(name="ping")
