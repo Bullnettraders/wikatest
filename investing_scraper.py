@@ -1,9 +1,36 @@
+import json
+import os
 from datetime import date, timedelta
 from ai_utils import extract_macro_event_time, extract_earnings_time
 
-# Sets für gepostete Ereignisse
-posted_events = set()
-posted_earnings = set()
+# 🔁 Dateipfade für persistente Speicherung
+POSTED_EVENTS_FILE = "posted_events.json"
+POSTED_EARNINGS_FILE = "posted_earnings.json"
+
+# 📥 Bereits gepostete Events laden
+def load_posted(file):
+    if os.path.exists(file):
+        with open(file, "r") as f:
+            return set(tuple(x) for x in json.load(f))
+    return set()
+
+# 💾 Speicherung aktualisieren
+def save_posted(data, file):
+    with open(file, "w") as f:
+        json.dump(list(data), f)
+
+# Sets initialisieren
+posted_events = load_posted(POSTED_EVENTS_FILE)
+posted_earnings = load_posted(POSTED_EARNINGS_FILE)
+
+# Funktionen zum Hinzufügen
+def add_posted_event(identifier):
+    posted_events.add(identifier)
+    save_posted(posted_events, POSTED_EVENTS_FILE)
+
+def add_posted_earning(identifier):
+    posted_earnings.add(identifier)
+    save_posted(posted_earnings, POSTED_EARNINGS_FILE)
 
 # 📅 Wirtschaftskalender (heute oder morgen)
 def get_investing_calendar(for_tomorrow=False):
@@ -26,11 +53,9 @@ def get_investing_calendar(for_tomorrow=False):
         }
     ]
 
-    # Datum setzen
     target_date = date.today() + timedelta(days=1 if for_tomorrow else 0)
     date_str = target_date.strftime("%d.%m.%Y")
 
-    # GPT-Zeiten ergänzen
     for event in dummy_data:
         event['date'] = date_str
         if not event.get('time') or event['time'].strip().lower() in ['n/a', '-', '', 'unbekannt']:
