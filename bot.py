@@ -1,9 +1,16 @@
 import os
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from zoneinfo import ZoneInfo
-from investing_scraper import get_investing_calendar, get_earnings_calendar, posted_events, posted_earnings
+from investing_scraper import (
+    get_investing_calendar,
+    get_earnings_calendar,
+    posted_events,
+    posted_earnings,
+    add_posted_event,
+    add_posted_earning
+)
 from ai_utils import extract_macro_event_time, extract_earnings_time
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -67,7 +74,7 @@ async def daily_summary():
 
     date_str = events[0]['date']
     embed = discord.Embed(
-        title=f"📅 Hier ist die Übersicht für den {date_str}",
+        title=f"📅 Übersicht für den {date_str}",
         description="Mit Uhrzeit und KI-Auswertung",
         color=0x3498db
     )
@@ -109,7 +116,7 @@ async def live_updates():
             embed.add_field(name="Ergebnis", value=f"Ist: {event['actual']} | Erwartet: {event['forecast']} | Vorher: {event['previous']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=interpret_macro_event(event), inline=False)
             await channel.send(embed=embed, delete_after=604800)
-            posted_events.add(identifier)
+            add_posted_event(identifier)
 
 @tasks.loop(minutes=1)
 async def live_earnings():
@@ -123,7 +130,6 @@ async def live_earnings():
     for event in events:
         identifier = (event['time'], event['ticker'])
         if event.get('eps_actual') and identifier not in posted_earnings:
-            posted_earnings.add(identifier)  # ✅ Nur einmal senden
             embed = discord.Embed(
                 title=f"💰 Earnings: {event['ticker']}",
                 description=f"📅 {event['date']} – 🕐 {event['time']} – {event['company']}",
@@ -133,6 +139,7 @@ async def live_earnings():
             embed.add_field(name="Umsatz", value=f"{event['revenue_actual']} vs {event['revenue_estimate']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=interpret_earnings(event), inline=False)
             await channel.send(embed=embed, delete_after=604800)
+            add_posted_earning(identifier)
 
 @tasks.loop(minutes=1)
 async def remind_important_events():
@@ -155,7 +162,7 @@ async def remind_important_events():
             channel = bot.get_channel(CHANNEL_ID_CALENDAR)
             msg = f"⏰ **In 5 Minuten:** {event['title']} ({event['country'].title()}) um {event['time']} Uhr!"
             await channel.send(msg, delete_after=604800)
-            posted_events.add(identifier)
+            add_posted_event(identifier)
 
 @bot.command(name="ping")
 async def ping(ctx):
