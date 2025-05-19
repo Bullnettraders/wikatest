@@ -1,7 +1,8 @@
-import openai
 import os
+from openai import OpenAI
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# GPT-Client initialisieren (ab v1.0)
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def extract_macro_event_time(text, country="Germany"):
     prompt = f"""
@@ -10,38 +11,35 @@ Du bist ein KI-Assistent für Finanzdaten. Bestimme die typische Veröffentlichu
 TEXT:
 {text}
 
-Antworte nur mit einer Uhrzeit im Format „HH:MM Uhr“. Wenn unklar, antworte mit „unbekannt“.
+Antwort im Format „HH:MM Uhr“. Wenn unklar, antworte mit „unbekannt“.
 """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
-        return response['choices'][0]['message']['content'].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print("GPT-Fehler:", e)
         return "unbekannt"
 
 def extract_earnings_time(text):
     prompt = f"""
-Du bist ein Finanzassistent. Erkenne aus diesem Text die typische Veröffentlichungszeit in MEZ (24h-Format).
-
-Beispiele:
-- "before market open" → 13:00 Uhr
-- "after market close" → 22:05 Uhr
-- "at 8:30 a.m. ET" → 14:30 Uhr
+Du bist ein Finanzassistent. Erkenne aus folgendem Text die typische Veröffentlichungszeit in MEZ (24h-Format).
 
 TEXT:
 {text}
 """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
         )
-        return response['choices'][0]['message']['content'].strip()
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print("GPT-Fehler:", e)
         return "unbekannt"
