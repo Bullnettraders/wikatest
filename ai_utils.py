@@ -16,7 +16,7 @@ Antworte nur mit einer Uhrzeit im Format „HH:MM Uhr“. Wenn unklar, antworte 
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
+            temperature=0.2,
         )
         return response['choices'][0]['message']['content'].strip()
     except Exception as e:
@@ -25,7 +25,7 @@ Antworte nur mit einer Uhrzeit im Format „HH:MM Uhr“. Wenn unklar, antworte 
 
 def extract_earnings_time(text):
     prompt = f"""
-Du bist ein Finanzassistent. Erkenne aus diesem Text die typische Earnings-Veröffentlichungszeit in MEZ (24h).
+Du bist ein Finanzassistent. Erkenne aus diesem Text die typische Veröffentlichungszeit in MEZ (24h-Format).
 
 Beispiele:
 - "before market open" → 13:00 Uhr
