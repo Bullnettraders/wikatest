@@ -14,7 +14,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 📊 Interpretation Makrodaten
+# KI-Interpretation Makrodaten
 def interpret_macro_event(event):
     try:
         actual = float(event["actual"].replace("%", "").replace(",", "."))
@@ -28,7 +28,7 @@ def interpret_macro_event(event):
     except:
         return "❓ Keine Bewertung möglich."
 
-# 📊 Interpretation Earnings
+# KI-Interpretation Earnings
 def interpret_earnings(event):
     try:
         eps_actual = float(event['eps_actual'].replace(',', '.'))
@@ -56,7 +56,6 @@ async def on_ready():
     live_earnings.start()
     remind_important_events.start()
 
-# 📅 Vorschau für morgen um 22:00 Uhr posten
 @tasks.loop(time=time(hour=22, minute=0, tzinfo=ZoneInfo("Europe/Berlin")))
 async def daily_summary():
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
@@ -89,7 +88,6 @@ async def daily_summary():
 
     await channel.send(embed=embed)
 
-# 📡 Live-Veröffentlichungen
 @tasks.loop(minutes=1)
 async def live_updates():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -113,7 +111,6 @@ async def live_updates():
             await channel.send(embed=embed)
             posted_events.add(identifier)
 
-# 💰 Live Earnings
 @tasks.loop(minutes=1)
 async def live_earnings():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -125,7 +122,7 @@ async def live_earnings():
 
     for event in events:
         identifier = (event['time'], event['ticker'])
-        if identifier not in posted_earnings:
+        if event.get('eps_actual') and identifier not in posted_earnings:
             embed = discord.Embed(
                 title=f"💰 Earnings: {event['ticker']}",
                 description=f"📅 {event['date']} – 🕐 {event['time']} – {event['company']}",
@@ -137,7 +134,6 @@ async def live_earnings():
             await channel.send(embed=embed)
             posted_earnings.add(identifier)
 
-# ⏰ Erinnerung für High-Impact Events
 @tasks.loop(minutes=1)
 async def remind_important_events():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -161,12 +157,10 @@ async def remind_important_events():
             await channel.send(msg)
             posted_events.add(identifier)
 
-# 🔧 Ping-Test
 @bot.command(name="ping")
 async def ping(ctx):
     await ctx.send("🏓 Pong!")
 
-# ▶ Start
 if __name__ == "__main__":
     try:
         from dotenv import load_dotenv
