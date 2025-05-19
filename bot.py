@@ -6,15 +6,17 @@ from zoneinfo import ZoneInfo
 from investing_scraper import get_investing_calendar, get_earnings_calendar, posted_events, posted_earnings
 from ai_utils import extract_macro_event_time, extract_earnings_time
 
+# Tokens & Channel-IDs
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID_CALENDAR = int(os.getenv("CHANNEL_ID_CALENDAR"))
 CHANNEL_ID_EARNINGS = int(os.getenv("CHANNEL_ID_EARNINGS"))
 
+# Discord Setup
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 📊 KI-Auswertung Wirtschaftsdaten
+# KI-Interpretation Wirtschaft
 def interpret_macro_event(event):
     try:
         actual_val = float(event['actual'].replace('%', '').replace(',', '.'))
@@ -28,7 +30,7 @@ def interpret_macro_event(event):
     except:
         return "❓ Keine Bewertung möglich."
 
-# 🧠 KI-Auswertung Earnings
+# KI-Interpretation Earnings
 def interpret_earnings(event):
     try:
         eps_actual = float(event['eps_actual'].replace(',', '.'))
@@ -48,6 +50,7 @@ def interpret_earnings(event):
     except:
         return "❓ Keine Bewertung möglich."
 
+# Start
 @bot.event
 async def on_ready():
     print(f"✅ Bot online als {bot.user}")
@@ -55,7 +58,7 @@ async def on_ready():
     live_updates.start()
     live_earnings.start()
 
-# 📅 Wirtschaftskalender für Morgen um 22:00 posten
+# 📅 Wirtschaftskalender (Tagesvorschau um 22:00)
 @tasks.loop(time=time(hour=22, minute=0, tzinfo=ZoneInfo("Europe/Berlin")))
 async def daily_summary():
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
@@ -63,7 +66,7 @@ async def daily_summary():
 
     embed = discord.Embed(
         title="📅 Wirtschaftskalender für Morgen",
-        description="Mit Datum und Veröffentlichungszeit (MEZ)",
+        description="Mit Datum, Uhrzeit und 📊 KI-Bewertung",
         color=0x3498db
     )
 
@@ -71,7 +74,11 @@ async def daily_summary():
     usa = [e for e in events if e['country'].lower() == "united states"]
 
     def format_event(e):
-        return f"📅 {e['date']} – 🕐 {e['time']} – {e['title']}"
+        base = f"📅 {e['date']} – 🕐 {e['time']} – {e['title']}"
+        if e.get("actual") and e.get("forecast"):
+            interpretation = interpret_macro_event(e)
+            return f"{base}\n{interpretation}"
+        return base
 
     if germany:
         embed.add_field(name="🇩🇪 Deutschland", value="\n".join([format_event(e) for e in germany]), inline=False)
@@ -85,7 +92,7 @@ async def daily_summary():
 
     await channel.send(embed=embed)
 
-# 📡 Wirtschaftsdaten Live-Postings
+# 📡 Live-Veröffentlichung von Makrodaten
 @tasks.loop(minutes=1)
 async def live_updates():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -112,7 +119,7 @@ async def live_updates():
             await channel.send(embed=embed)
             posted_events.add(identifier)
 
-# 💰 Live-Earnings Postings
+# 💰 Live-Earnings
 @tasks.loop(minutes=1)
 async def live_earnings():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -139,12 +146,12 @@ async def live_earnings():
             await channel.send(embed=embed)
             posted_earnings.add(identifier)
 
-# 🔧 Testbefehl
+# Testbefehl
 @bot.command(name="ping")
 async def ping(ctx):
     await ctx.send("🏓 Pong!")
 
-# 🟢 Start
+# Bot starten
 if __name__ == "__main__":
     try:
         from dotenv import load_dotenv
