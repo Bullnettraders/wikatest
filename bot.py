@@ -48,7 +48,6 @@ def interpret_earnings(event):
     except:
         return "❓ Keine Bewertung möglich."
 
-# ✅ Bot ready
 @bot.event
 async def on_ready():
     print(f"✅ Bot online als {bot.user}")
@@ -56,7 +55,7 @@ async def on_ready():
     live_updates.start()
     live_earnings.start()
 
-# 📅 Wirtschaftskalender (22 Uhr)
+# 📅 Wirtschaftskalender für Morgen um 22:00 posten
 @tasks.loop(time=time(hour=22, minute=0, tzinfo=ZoneInfo("Europe/Berlin")))
 async def daily_summary():
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
@@ -64,12 +63,12 @@ async def daily_summary():
 
     embed = discord.Embed(
         title="📅 Wirtschaftskalender für Morgen",
-        description="Mit Datum & Uhrzeit",
+        description="Mit Datum und Veröffentlichungszeit (MEZ)",
         color=0x3498db
     )
 
-    germany = [e for e in events if e['country'] == "germany"]
-    usa = [e for e in events if e['country'] == "united states"]
+    germany = [e for e in events if e['country'].lower() == "germany"]
+    usa = [e for e in events if e['country'].lower() == "united states"]
 
     def format_event(e):
         return f"📅 {e['date']} – 🕐 {e['time']} – {e['title']}"
@@ -86,7 +85,7 @@ async def daily_summary():
 
     await channel.send(embed=embed)
 
-# 📡 Wirtschaftsdaten live
+# 📡 Wirtschaftsdaten Live-Postings
 @tasks.loop(minutes=1)
 async def live_updates():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -99,7 +98,7 @@ async def live_updates():
     for event in events:
         identifier = (event['time'], event['title'])
         if event['actual'] and identifier not in posted_events:
-            flag = "🇩🇪" if event['country'] == "germany" else "🇺🇸"
+            flag = "🇩🇪" if event['country'].lower() == "germany" else "🇺🇸"
             sentiment = interpret_macro_event(event)
 
             embed = discord.Embed(
@@ -113,7 +112,7 @@ async def live_updates():
             await channel.send(embed=embed)
             posted_events.add(identifier)
 
-# 💰 Earnings live
+# 💰 Live-Earnings Postings
 @tasks.loop(minutes=1)
 async def live_earnings():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -140,7 +139,7 @@ async def live_earnings():
             await channel.send(embed=embed)
             posted_earnings.add(identifier)
 
-# 🔧 Optional: Testbefehl
+# 🔧 Testbefehl
 @bot.command(name="ping")
 async def ping(ctx):
     await ctx.send("🏓 Pong!")
