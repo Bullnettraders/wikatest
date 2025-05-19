@@ -21,6 +21,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# 📊 Makrodaten-Interpretation
 def interpret_macro_event(event):
     try:
         actual = float(event["actual"].replace("%", "").replace(",", "."))
@@ -34,6 +35,7 @@ def interpret_macro_event(event):
     except:
         return "❓ Keine Bewertung möglich."
 
+# 💰 Earnings-Interpretation
 def interpret_earnings(event):
     try:
         eps_actual = float(event['eps_actual'].replace(',', '.'))
@@ -53,6 +55,7 @@ def interpret_earnings(event):
     except:
         return "❓ Keine Bewertung möglich."
 
+# ✅ Startup
 @bot.event
 async def on_ready():
     print(f"✅ Bot online als {bot.user}")
@@ -61,6 +64,7 @@ async def on_ready():
     live_earnings.start()
     remind_important_events.start()
 
+# 📅 Tägliche Zusammenfassung
 @tasks.loop(time=time(hour=22, minute=0, tzinfo=ZoneInfo("Europe/Berlin")))
 async def daily_summary():
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
@@ -93,6 +97,7 @@ async def daily_summary():
 
     await channel.send(embed=embed, delete_after=604800)
 
+# 🔴 Live-Makro-Updates
 @tasks.loop(minutes=1)
 async def live_updates():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -116,6 +121,7 @@ async def live_updates():
             await channel.send(embed=embed, delete_after=604800)
             add_posted_event(identifier)
 
+# 💰 Live-Earnings – EINMAL pro Ticker/Tag
 @tasks.loop(minutes=1)
 async def live_earnings():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -126,7 +132,7 @@ async def live_earnings():
     events = get_earnings_calendar()
 
     for event in events:
-        identifier = (event['time'], event['ticker'])
+        identifier = (event['date'], event['ticker'])  # stabil & eindeutig
         if event.get('eps_actual') and identifier not in posted_earnings:
             embed = discord.Embed(
                 title=f"💰 Earnings: {event['ticker']}",
@@ -139,6 +145,7 @@ async def live_earnings():
             await channel.send(embed=embed, delete_after=604800)
             add_posted_earning(identifier)
 
+# ⏰ Erinnerungen vor Events mit hoher Wichtigkeit
 @tasks.loop(minutes=1)
 async def remind_important_events():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -162,7 +169,7 @@ async def remind_important_events():
             await channel.send(msg, delete_after=604800)
             add_posted_event(identifier)
 
-# 🧹 Cleanup-Befehl
+# 🧹 Cleanup-Befehl: Löscht alle Bot-Nachrichten
 async def cleanup_channel(channel):
     def is_bot_message(msg):
         return msg.author == bot.user
@@ -182,10 +189,12 @@ async def cleanup_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("❌ Du hast keine Berechtigung für diesen Befehl.", delete_after=10)
 
+# Test-Befehl
 @bot.command(name="ping")
 async def ping(ctx):
     await ctx.send("🏓 Pong!")
 
+# 🔁 Bot starten
 if __name__ == "__main__":
     try:
         from dotenv import load_dotenv
