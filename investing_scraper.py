@@ -9,30 +9,18 @@ def get_investing_calendar(for_tomorrow=False):
         {
             'title': 'EZB Zinsentscheid',
             'country': 'germany',
-            'time': '',  # Wird durch GPT gesetzt
+            'time': '',
             'actual': '',
             'forecast': '3.50%',
             'previous': '3.25%',
-        },
-        {
-            'title': 'US Arbeitsmarktdaten',
-            'country': 'united states',
-            'time': '',
-            'actual': '',
-            'forecast': '5.0%',
-            'previous': '4.8%',
         }
     ]
 
-    today = date.today()
-    event_date = today + timedelta(days=1 if for_tomorrow else 0)
-    date_str = event_date.strftime("%d.%m.%Y")
-
+    target_date = date.today() + timedelta(days=1 if for_tomorrow else 0)
     for event in dummy_data:
+        event['date'] = target_date.strftime("%d.%m.%Y")
         if not event['time']:
-            event['time'] = extract_macro_event_time(event['title'], country=event['country'])
-        event['date'] = date_str
-
+            event['time'] = extract_macro_event_time(event['title'], event['country'])
     return dummy_data
 
 def get_earnings_calendar():
@@ -45,24 +33,11 @@ def get_earnings_calendar():
             'eps_estimate': '1,39',
             'revenue_actual': '81,2',
             'revenue_estimate': '79,5',
-        },
-        {
-            'ticker': 'MSFT',
-            'company': 'Microsoft Corp.',
-            'time': '',
-            'eps_actual': '2,17',
-            'eps_estimate': '2,00',
-            'revenue_actual': '56,0',
-            'revenue_estimate': '54,2',
         }
     ]
-
-    date_str = date.today().strftime("%d.%m.%Y")
-
+    today_str = date.today().strftime("%d.%m.%Y")
     for event in dummy_data:
+        event['date'] = today_str
         if not event['time']:
-            description = f"{event['company']} ({event['ticker']}) reports after market close"
-            event['time'] = extract_earnings_time(description)
-        event['date'] = date_str
-
+            event['time'] = extract_earnings_time(f"{event['company']} reports after market close")
     return dummy_data
