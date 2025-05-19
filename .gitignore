@@ -1,0 +1,5 @@
+.env
+__pycache__/
+*.pyc
+posted_events.json
+posted_earnings.json
