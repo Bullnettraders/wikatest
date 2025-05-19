@@ -21,7 +21,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# KI-Interpretation Makrodaten
 def interpret_macro_event(event):
     try:
         actual = float(event["actual"].replace("%", "").replace(",", "."))
@@ -35,7 +34,6 @@ def interpret_macro_event(event):
     except:
         return "❓ Keine Bewertung möglich."
 
-# KI-Interpretation Earnings
 def interpret_earnings(event):
     try:
         eps_actual = float(event['eps_actual'].replace(',', '.'))
@@ -163,6 +161,26 @@ async def remind_important_events():
             msg = f"⏰ **In 5 Minuten:** {event['title']} ({event['country'].title()}) um {event['time']} Uhr!"
             await channel.send(msg, delete_after=604800)
             add_posted_event(identifier)
+
+# 🧹 Cleanup-Befehl
+async def cleanup_channel(channel):
+    def is_bot_message(msg):
+        return msg.author == bot.user
+    deleted = await channel.purge(limit=500, check=is_bot_message)
+    return len(deleted)
+
+@bot.command(name="cleanup")
+@commands.has_permissions(administrator=True)
+async def cleanup(ctx):
+    await ctx.send("🧹 Lösche alte Bot-Nachrichten...", delete_after=5)
+    deleted_calendar = await cleanup_channel(bot.get_channel(CHANNEL_ID_CALENDAR))
+    deleted_earnings = await cleanup_channel(bot.get_channel(CHANNEL_ID_EARNINGS))
+    await ctx.send(f"✅ {deleted_calendar + deleted_earnings} Nachrichten gelöscht.", delete_after=10)
+
+@cleanup.error
+async def cleanup_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Du hast keine Berechtigung für diesen Befehl.", delete_after=10)
 
 @bot.command(name="ping")
 async def ping(ctx):
