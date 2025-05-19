@@ -1,7 +1,6 @@
 import os
 from openai import OpenAI
 
-# GPT-Client initialisieren (ab v1.0)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def extract_macro_event_time(text, country="Germany"):
@@ -16,9 +15,7 @@ Antwort im Format „HH:MM Uhr“. Wenn unklar, antworte mit „unbekannt“.
     try:
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -35,9 +32,7 @@ TEXT:
     try:
         response = client.chat.completions.create(
             model="gpt-4",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
