@@ -123,6 +123,7 @@ async def live_earnings():
     for event in events:
         identifier = (event['time'], event['ticker'])
         if event.get('eps_actual') and identifier not in posted_earnings:
+            posted_earnings.add(identifier)  # ✅ Nur einmal senden
             embed = discord.Embed(
                 title=f"💰 Earnings: {event['ticker']}",
                 description=f"📅 {event['date']} – 🕐 {event['time']} – {event['company']}",
@@ -132,7 +133,6 @@ async def live_earnings():
             embed.add_field(name="Umsatz", value=f"{event['revenue_actual']} vs {event['revenue_estimate']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=interpret_earnings(event), inline=False)
             await channel.send(embed=embed)
-            posted_earnings.add(identifier)
 
 @tasks.loop(minutes=1)
 async def remind_important_events():
