@@ -6,17 +6,14 @@ from zoneinfo import ZoneInfo
 from investing_scraper import get_investing_calendar, get_earnings_calendar, posted_events, posted_earnings
 from ai_utils import extract_macro_event_time, extract_earnings_time
 
-# Load Tokens from Railway ENV
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 CHANNEL_ID_CALENDAR = int(os.getenv("CHANNEL_ID_CALENDAR"))
 CHANNEL_ID_EARNINGS = int(os.getenv("CHANNEL_ID_EARNINGS"))
 
-# Discord Setup
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# AI-Auswertung für Makro-Events
 def interpret_macro_event(event):
     try:
         actual_val = float(event['actual'].replace('%', '').replace(',', '.'))
@@ -30,18 +27,13 @@ def interpret_macro_event(event):
     except:
         return "❓ Keine Bewertung möglich."
 
-# AI-Auswertung für Earnings
 def interpret_earnings(event):
     try:
         eps_actual = float(event['eps_actual'].replace(',', '.'))
         eps_est = float(event['eps_estimate'].replace(',', '.'))
         rev_actual = float(event['revenue_actual'].replace(',', '.').replace(' Mrd', ''))
         rev_est = float(event['revenue_estimate'].replace(',', '.').replace(' Mrd', ''))
-
-        eps_diff = eps_actual - eps_est
-        rev_diff = rev_actual - rev_est
-
-        if eps_diff > 0 and rev_diff > 0:
+        if eps_diff := eps_actual - eps_est > 0 and rev_diff := rev_actual - rev_est > 0:
             return "🟢 Positiv – Gewinn und Umsatz über den Erwartungen."
         elif eps_diff < 0 and rev_diff < 0:
             return "🔴 Negativ – Gewinn und Umsatz unter den Erwartungen."
@@ -57,7 +49,6 @@ async def on_ready():
     live_updates.start()
     live_earnings.start()
 
-# 📅 Wirtschaftskalender täglich um 22:00
 @tasks.loop(time=time(hour=22, minute=0, tzinfo=ZoneInfo("Europe/Berlin")))
 async def daily_summary():
     channel = bot.get_channel(CHANNEL_ID_CALENDAR)
@@ -76,20 +67,12 @@ async def daily_summary():
         return f"📅 {e['date']} – 🕐 {e['time']} – {e['title']}"
 
     if germany:
-        text = "\n".join([format_event(e) for e in germany])
-        embed.add_field(name="🇩🇪 Deutschland", value=text, inline=False)
-    else:
-        embed.add_field(name="🇩🇪 Deutschland", value="🔔 Keine Termine.", inline=False)
-
+        embed.add_field(name="🇩🇪 Deutschland", value="\n".join([format_event(e) for e in germany]), inline=False)
     if usa:
-        text = "\n".join([format_event(e) for e in usa])
-        embed.add_field(name="🇺🇸 USA", value=text, inline=False)
-    else:
-        embed.add_field(name="🇺🇸 USA", value="🔔 Keine Termine.", inline=False)
+        embed.add_field(name="🇺🇸 USA", value="\n".join([format_event(e) for e in usa]), inline=False)
 
     await channel.send(embed=embed)
 
-# 📡 Live-Wirtschaftsveröffentlichungen
 @tasks.loop(minutes=1)
 async def live_updates():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -102,7 +85,7 @@ async def live_updates():
     for event in today_events:
         identifier = (event['time'], event['title'])
         if event['actual'] and identifier not in posted_events:
-            flag = "🇩🇪" if event['country'] == "germany" else "🇺🇸" if event['country'] == "united states" else ""
+            flag = "🇩🇪" if event['country'] == "germany" else "🇺🇸"
             sentiment = interpret_macro_event(event)
 
             embed = discord.Embed(
@@ -110,17 +93,11 @@ async def live_updates():
                 description=f"📅 {event['date']} – 🕐 {event['time']} – {event['title']}",
                 color=0xe67e22
             )
-            embed.add_field(
-                name="Ergebnis",
-                value=f"**Ist:** {event['actual']} | **Erwartet:** {event['forecast']} | **Vorher:** {event['previous']}",
-                inline=False
-            )
+            embed.add_field(name="Ergebnis", value=f"Ist: {event['actual']} | Erwartet: {event['forecast']} | Vorher: {event['previous']}", inline=False)
             embed.add_field(name="📊 KI-Einschätzung", value=sentiment, inline=False)
-
             await channel.send(embed=embed)
             posted_events.add(identifier)
 
-# 💰 Live Earnings
 @tasks.loop(minutes=1)
 async def live_earnings():
     now = datetime.now(ZoneInfo("Europe/Berlin"))
@@ -140,38 +117,18 @@ async def live_earnings():
                 description=f"📅 {event['date']} – 🕐 {event['time']} – {event['company']}",
                 color=0x1abc9c
             )
-            embed.add_field(
-                name="Ergebnis",
-                value=f"**EPS (Ist):** {event['eps_actual']} | **Erwartet:** {event['eps_estimate']}",
-                inline=False
-            )
-            embed.add_field(
-                name="Umsatz",
-                value=f"**Ist:** {event['revenue_actual']} | **Erwartet:** {event['revenue_estimate']}",
-                inline=False
-            )
-            embed.add_field(
-                name="📊 KI-Einschätzung",
-                value=sentiment,
-                inline=False
-            )
+            embed.add_field(name="Ergebnis", value=f"EPS: {event['eps_actual']} vs {event['eps_estimate']}", inline=False)
+            embed.add_field(name="Umsatz", value=f"{event['revenue_actual']} vs {event['revenue_estimate']}", inline=False)
+            embed.add_field(name="📊 KI-Einschätzung", value=sentiment, inline=False)
             await channel.send(embed=embed)
             posted_earnings.add(identifier)
 
-# 🧪 Optionaler Ping-Befehl
-@bot.command(name="ping")
-async def ping(ctx):
-    await ctx.send("🏓 Pong!")
-
-# Lokale Umgebung laden, wenn vorhanden
 if __name__ == "__main__":
     try:
         from dotenv import load_dotenv
         load_dotenv()
     except:
         pass
-
     if not DISCORD_TOKEN:
         raise ValueError("❌ DISCORD_TOKEN fehlt!")
-
     bot.run(DISCORD_TOKEN)
