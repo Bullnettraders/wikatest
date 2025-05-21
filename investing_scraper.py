@@ -1,7 +1,8 @@
 import json
 import os
+import time
 from datetime import date, datetime, timedelta
-from ai_utils import extract_macro_event_time, extract_earnings_time
+from ai_utils import extract_macro_event_time, extract_earnings_time  # <- deine Hilfsfunktionen
 
 # 🔁 Dateipfade für persistente Speicherung
 POSTED_EVENTS_FILE = "posted_events.json"
@@ -43,7 +44,7 @@ def get_investing_calendar(for_tomorrow=False):
         {
             'title': 'Verbraucherpreisindex (VPI)',
             'country': 'germany',
-            'time': '',  # GPT erkennt
+            'time': '',
             'actual': '6.3%',
             'forecast': '6.1%',
             'previous': '6.5%',
@@ -51,7 +52,7 @@ def get_investing_calendar(for_tomorrow=False):
         {
             'title': 'Non-Farm Payrolls',
             'country': 'united states',
-            'time': '',  # GPT erkennt
+            'time': '',
             'actual': '190k',
             'forecast': '180k',
             'previous': '175k',
@@ -74,7 +75,7 @@ def get_earnings_calendar(for_tomorrow=False):
         {
             'ticker': 'AAPL',
             'company': 'Apple Inc.',
-            'time': '',  # GPT erkennt
+            'time': '',
             'eps_actual': '1,45',
             'eps_estimate': '1,39',
             'revenue_actual': '81,2',
@@ -100,7 +101,7 @@ def fetch_calendar_data():
     earnings_events = get_earnings_calendar(for_tomorrow=for_tomorrow)
     return investing_events, earnings_events
 
-# 🖨️ Optional: Ausgabe formatieren
+# 🖨️ Ausgabe formatieren
 def print_calendar_summary():
     investing_events, earnings_events = fetch_calendar_data()
 
@@ -114,6 +115,26 @@ def print_calendar_summary():
         print(f"{event['date']} - {event['company']} ({event['ticker']}) um {event['time']}")
         print(f"  EPS: {event['eps_actual']} (erwartet: {event['eps_estimate']}), Umsatz: {event['revenue_actual']} Mrd (erwartet: {event['revenue_estimate']} Mrd)\n")
 
-# Beispiel-Aufruf
+# 🕓 Zeitfenster prüfen (volle und halbe Stunde)
+def is_fetch_time(now):
+    return now.minute in [0, 30] and now.second < 5  # innerhalb der ersten 5 Sekunden
+
+# 🔁 Hauptloop
+def wait_until_next_check():
+    already_fetched = False
+    print("🚀 Starte Kalender-Überwachung ...")
+    while True:
+        now = datetime.now()
+
+        if is_fetch_time(now):
+            if not already_fetched:
+                print(f"\n⏰ Datenabruf um {now.strftime('%H:%M:%S')}")
+                print_calendar_summary()
+                already_fetched = True
+        else:
+            already_fetched = False
+
+        time.sleep(1)
+
 if __name__ == "__main__":
-    print_calendar_summary()
+    wait_until_next_check()
