@@ -68,8 +68,8 @@ def get_investing_calendar(for_tomorrow=False):
 
     return dummy_data
 
-# 💰 Earnings Kalender
-def get_earnings_calendar():
+# 💰 Earnings Kalender (heute oder morgen)
+def get_earnings_calendar(for_tomorrow=False):
     dummy_data = [
         {
             'ticker': 'AAPL',
@@ -82,7 +82,8 @@ def get_earnings_calendar():
         }
     ]
 
-    date_str = date.today().strftime("%d.%m.%Y")
+    target_date = date.today() + timedelta(days=1 if for_tomorrow else 0)
+    date_str = target_date.strftime("%d.%m.%Y")
 
     for event in dummy_data:
         event['date'] = date_str
@@ -96,5 +97,23 @@ def get_earnings_calendar():
 def fetch_calendar_data():
     for_tomorrow = should_fetch_for_tomorrow()
     investing_events = get_investing_calendar(for_tomorrow=for_tomorrow)
-    earnings_events = get_earnings_calendar() if not for_tomorrow else []  # Earnings meist nur am selben Tag relevant
+    earnings_events = get_earnings_calendar(for_tomorrow=for_tomorrow)
     return investing_events, earnings_events
+
+# 🖨️ Optional: Ausgabe formatieren
+def print_calendar_summary():
+    investing_events, earnings_events = fetch_calendar_data()
+
+    print("📅 Wirtschaftstermine:")
+    for event in investing_events:
+        print(f"{event['date']} - {event['title']} ({event['country'].title()}) um {event['time']}")
+        print(f"  Prognose: {event['forecast']}, Vorher: {event['previous']}, Tatsächlich: {event['actual']}\n")
+
+    print("💰 Earnings Releases:")
+    for event in earnings_events:
+        print(f"{event['date']} - {event['company']} ({event['ticker']}) um {event['time']}")
+        print(f"  EPS: {event['eps_actual']} (erwartet: {event['eps_estimate']}), Umsatz: {event['revenue_actual']} Mrd (erwartet: {event['revenue_estimate']} Mrd)\n")
+
+# Beispiel-Aufruf
+if __name__ == "__main__":
+    print_calendar_summary()
