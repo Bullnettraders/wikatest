@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from ai_utils import extract_macro_event_time, extract_earnings_time
 
 # 🔁 Dateipfade für persistente Speicherung
@@ -31,6 +31,11 @@ def add_posted_event(identifier):
 def add_posted_earning(identifier):
     posted_earnings.add(identifier)
     save_posted(posted_earnings, POSTED_EARNINGS_FILE)
+
+# 🕒 Entscheide anhand der Uhrzeit, ob morgen angezeigt werden soll
+def should_fetch_for_tomorrow():
+    now = datetime.now()
+    return now.hour >= 20  # Nach 20:00 Uhr wird für morgen vorbereitet
 
 # 📅 Wirtschaftskalender (heute oder morgen)
 def get_investing_calendar(for_tomorrow=False):
@@ -85,4 +90,11 @@ def get_earnings_calendar():
             description = f"{event['company']} ({event['ticker']}) reports after market close"
             event['time'] = extract_earnings_time(description)
 
-    return dummy_data
+    return dummy_data 
+
+# 📋 Holen der Kalenderdaten mit Vorschau-Logik
+def fetch_calendar_data():
+    for_tomorrow = should_fetch_for_tomorrow()
+    investing_events = get_investing_calendar(for_tomorrow=for_tomorrow)
+    earnings_events = get_earnings_calendar() if not for_tomorrow else []  # Earnings meist nur am selben Tag relevant
+    return investing_events, earnings_events
