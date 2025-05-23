@@ -6,11 +6,14 @@ import discord
 
 POSTED_EVENTS_FILE = "posted_events.json"
 
+# 🔧 Sicherstellen, dass Datei existiert
+if not os.path.exists(POSTED_EVENTS_FILE):
+    with open(POSTED_EVENTS_FILE, "w") as f:
+        json.dump([], f)
+
 def load_posted():
-    if os.path.exists(POSTED_EVENTS_FILE):
-        with open(POSTED_EVENTS_FILE, "r") as f:
-            return set(tuple(x) for x in json.load(f))
-    return set()
+    with open(POSTED_EVENTS_FILE, "r") as f:
+        return set(tuple(x) for x in json.load(f))
 
 def save_posted(posted_events):
     with open(POSTED_EVENTS_FILE, "w") as f:
@@ -43,10 +46,12 @@ def get_investing_calendar(for_tomorrow=False):
     ]
     target_date = date.today() + timedelta(days=1 if for_tomorrow else 0)
     date_str = target_date.strftime("%d.%m.%Y")
+
     for event in dummy_data:
         event['date'] = date_str
         if not event['time']:
             event['time'] = extract_macro_event_time(event['title'], country=event['country'])
+
     return dummy_data
 
 async def post_today_events(bot, channel_id, test_mode=False):
