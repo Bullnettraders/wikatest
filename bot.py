@@ -21,7 +21,7 @@ scheduler = AsyncIOScheduler()
 async def on_ready():
     print(f"✅ Bot ist online als {bot.user}")
     scheduler.add_job(lambda: post_today_events(bot, CHANNEL_EVENTS), 'cron', hour=0, minute=0)
-    scheduler.add_job(lambda: check_for_actual_updates(bot, CHANNEL_EVENTS), 'interval', minutes=5)
+    scheduler.add_job(lambda: check_for_actual_updates(bot, CHANNEL_EVENTS), 'interval', seconds=60)
     scheduler.start()
     try:
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
