@@ -57,7 +57,7 @@ def get_investing_calendar(for_tomorrow=False, backtest=False):
     ]
 
     # 🔍 Nur Events mit 2 oder mehr Sternen
-    dummy_data = [e for e in dummy_data if e.get('importance', 1) >= 2]
+ dummy_data = dummy_data  # Keine Filterung nach Sternen
 
     target_date = date.today() + timedelta(days=1 if for_tomorrow else 0)
     date_str = target_date.strftime("%d.%m.%Y")
