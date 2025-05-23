@@ -1,45 +1,35 @@
-import time
-from datetime import datetime
-from investing_scraper import get_investing_calendar
+import discord
+from discord.ext import commands
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from dotenv import load_dotenv
+import os
+from calendar_utils import get_investing_calendar, post_today_events, check_for_actual_updates
 
-# 🕒 Entscheide anhand der Uhrzeit, ob morgen angezeigt werden soll
-def should_fetch_for_tomorrow():
-    now = datetime.now()
-    return now.hour >= 20  # Nach 20:00 Uhr wird für morgen vorbereitet
+load_dotenv()
 
-# 📋 Kalenderdaten abrufen
-def fetch_calendar_data():
-    for_tomorrow = should_fetch_for_tomorrow()
-    return get_investing_calendar(for_tomorrow=for_tomorrow)
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID"))
+CHANNEL_EVENTS = int(os.getenv("DISCORD_CHANNEL_ID_EVENTS"))
+CHANNEL_CONTROL = int(os.getenv("DISCORD_CHANNEL_ID_CONTROL"))
 
-# 🖨️ Kalenderdaten ausgeben
-def print_calendar_summary():
-    investing_events = fetch_calendar_data()
-    print("📅 Wirtschaftstermine:")
-    for event in investing_events:
-        print(f"{event['date']} - {event['title']} ({event['country'].title()}) um {event['time']}")
-        print(f"  Prognose: {event['forecast']}, Vorher: {event['previous']}, Tatsächlich: {event['actual']}\n")
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 🕓 Check alle 30 Minuten
-def is_fetch_time(now):
-    return now.minute in [0, 30] and now.second < 5
+scheduler = AsyncIOScheduler()
 
-# 🔁 Hauptloop
-def wait_until_next_check():
-    already_fetched = False
-    print("🚀 Starte Kalender-Überwachung ...")
-    while True:
-        now = datetime.now()
+@bot.event
+async def on_ready():
+    print(f"✅ Bot ist eingeloggt als {bot.user}")
+    scheduler.add_job(lambda: post_today_events(bot, CHANNEL_EVENTS), 'cron', hour=0, minute=0)
+    scheduler.add_job(lambda: check_for_actual_updates(bot, CHANNEL_EVENTS), 'interval', minutes=5)
+    scheduler.start()
 
-        if is_fetch_time(now):
-            if not already_fetched:
-                print(f"\n⏰ Datenabruf um {now.strftime('%H:%M:%S')}")
-                print_calendar_summary()
-                already_fetched = True
-        else:
-            already_fetched = False
+@bot.slash_command(guild_ids=[GUILD_ID], name="testkalender", description="Kontrolliere den Wirtschaftskalender")
+async def testkalender(ctx):
+    events = get_investing_calendar()
+    for event in events:
+        msg = f"🧪 TEST: {event['title']} ({event['country'].capitalize()})\n" \
+              f"Zeit: {event['time']} | Prognose: {event['forecast']} | Vorher: {event['previous']}"
+        await ctx.send(msg)
 
-        time.sleep(1)
-
-if __name__ == "__main__":
-    wait_until_next_check()
+bot.run(TOKEN)
