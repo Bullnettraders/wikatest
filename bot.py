@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 import os
@@ -19,17 +19,23 @@ scheduler = AsyncIOScheduler()
 
 @bot.event
 async def on_ready():
-    print(f"✅ Bot ist eingeloggt als {bot.user}")
+    print(f"✅ Bot eingeloggt als {bot.user}")
     scheduler.add_job(lambda: post_today_events(bot, CHANNEL_EVENTS), 'cron', hour=0, minute=0)
     scheduler.add_job(lambda: check_for_actual_updates(bot, CHANNEL_EVENTS), 'interval', minutes=5)
     scheduler.start()
+    try:
+        synced = await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f"🔁 Slash-Commands synchronisiert: {[cmd.name for cmd in synced]}")
+    except Exception as e:
+        print(f"⚠️ Fehler beim Slash-Command-Sync: {e}")
 
-@bot.slash_command(guild_ids=[GUILD_ID], name="testkalender", description="Kontrolliere den Wirtschaftskalender")
-async def testkalender(ctx):
+@bot.tree.command(name="testkalender", description="Kontrolliere den Wirtschaftskalender", guild=discord.Object(id=GUILD_ID))
+async def testkalender(interaction: discord.Interaction):
     events = get_investing_calendar()
     for event in events:
         msg = f"🧪 TEST: {event['title']} ({event['country'].capitalize()})\n" \
               f"Zeit: {event['time']} | Prognose: {event['forecast']} | Vorher: {event['previous']}"
-        await ctx.send(msg)
+        await interaction.channel.send(msg)
+    await interaction.response.send_message("✅ Kontrollausgabe gesendet.", ephemeral=True)
 
 bot.run(TOKEN)
