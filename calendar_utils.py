@@ -2,6 +2,7 @@ import json
 import os
 from datetime import date, timedelta
 from ai_utils import extract_macro_event_time
+import discord
 
 POSTED_EVENTS_FILE = "posted_events.json"
 
@@ -50,9 +51,7 @@ def get_investing_calendar(for_tomorrow=False):
 
 async def post_today_events(bot, channel_id, test_mode=False):
     events = get_investing_calendar()
-    channel = bot.get_channel(channel_id)
 
-    # Sortiere nach Uhrzeit
     def parse_time(e):
         try:
             h, m = map(int, e['time'].split(":"))
@@ -61,9 +60,11 @@ async def post_today_events(bot, channel_id, test_mode=False):
             return 9999
     events.sort(key=parse_time)
 
-    date_str = events[0]['date'] if events else date.today().strftime("%d.%m.%Y")
-    header = f"📅 Kommende Wirtschaftstermine ({date_str})"
-    message_lines = []
+    date_str = events[0]['date'] if events else "Heute"
+    embed = discord.Embed(
+        title=f"📅 Wirtschaftstermine ({date_str})",
+        color=discord.Color.blue()
+    )
 
     flag_map = {
         'germany': '🇩🇪',
@@ -72,19 +73,21 @@ async def post_today_events(bot, channel_id, test_mode=False):
 
     for event in events:
         identifier = (event['title'], event['date'], event['country'])
+
         if test_mode or identifier not in posted_events:
             emoji = flag_map.get(event['country'].lower(), '🌍')
-            line = (
-                f"{emoji} {event['time']} - {event['title']}\n"
-                f"    Prognose: {event['forecast']} | Vorher: {event['previous']}"
-            )
-            message_lines.append(line)
+            warn = " 🚨" if any(kw in event['title'].lower() for kw in ["zins", "entscheidung", "arbeitslosen", "inflation"]) else ""
+
+            name = f"{emoji} {event['time']} – {event['title']}{warn}"
+            value = f"🔹 Prognose: {event['forecast']} | 🔸 Vorher: {event['previous']}"
+            embed.add_field(name=name, value=value, inline=False)
+
             if not test_mode:
                 add_posted_event(identifier)
 
-    if message_lines:
-        full_message = header + "\n\n" + "\n\n".join(message_lines)
-        await channel.send(full_message)
+    if embed.fields:
+        channel = bot.get_channel(channel_id)
+        await channel.send(embed=embed)
 
 async def check_for_actual_updates(bot, channel_id):
     events = get_investing_calendar()
@@ -93,17 +96,19 @@ async def check_for_actual_updates(bot, channel_id):
     for event in events:
         identifier = (event['title'], event['date'], event['country'])
 
-        # Wenn aktuelle Zahlen da sind UND noch nicht gepostet wurden
         if event['actual'] and identifier not in posted_events:
-            flag_map = {
+            emoji = {
                 'germany': '🇩🇪',
                 'united states': '🇺🇸'
-            }
-            emoji = flag_map.get(event['country'].lower(), '🌍')
-            msg = (
-                f"✅ Zahlen veröffentlicht: {event['title']} ({emoji})\n"
-                f"Ergebnis: {event['actual']} | Prognose: {event['forecast']} | Vorher: {event['previous']}"
-            )
-            await channel.send(msg)
-            add_posted_event(identifier)
+            }.get(event['country'].lower(), '🌍')
 
+            embed = discord.Embed(
+                title=f"✅ Zahlen veröffentlicht: {event['title']} ({emoji})",
+                color=discord.Color.green()
+            )
+            embed.add_field(name="Ergebnis", value=event['actual'], inline=True)
+            embed.add_field(name="Prognose", value=event['forecast'], inline=True)
+            embed.add_field(name="Vorher", value=event['previous'], inline=True)
+
+            await channel.send(embed=embed)
+            add_posted_event(identifier)
