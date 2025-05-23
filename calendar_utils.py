@@ -85,3 +85,25 @@ async def post_today_events(bot, channel_id, test_mode=False):
     if message_lines:
         full_message = header + "\n\n" + "\n\n".join(message_lines)
         await channel.send(full_message)
+
+async def check_for_actual_updates(bot, channel_id):
+    events = get_investing_calendar()
+    channel = bot.get_channel(channel_id)
+
+    for event in events:
+        identifier = (event['title'], event['date'], event['country'])
+
+        # Wenn aktuelle Zahlen da sind UND noch nicht gepostet wurden
+        if event['actual'] and identifier not in posted_events:
+            flag_map = {
+                'germany': '🇩🇪',
+                'united states': '🇺🇸'
+            }
+            emoji = flag_map.get(event['country'].lower(), '🌍')
+            msg = (
+                f"✅ Zahlen veröffentlicht: {event['title']} ({emoji})\n"
+                f"Ergebnis: {event['actual']} | Prognose: {event['forecast']} | Vorher: {event['previous']}"
+            )
+            await channel.send(msg)
+            add_posted_event(identifier)
+
