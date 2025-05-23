@@ -98,18 +98,47 @@ async def check_for_actual_updates(bot, channel_id):
     events = get_investing_calendar()
     channel = bot.get_channel(channel_id)
 
+    NEGATIVE_GOOD_KEYWORDS = ["inflation", "arbeitslosen", "vpi", "verbraucherpreisindex"]
+    POSITIVE_GOOD_KEYWORDS = ["payroll", "bip", "beschäftigung", "wachstum"]
+
+    def interpret_event(event):
+        actual = event["actual"]
+        forecast = event["forecast"]
+
+        try:
+            actual_val = float(actual.replace("%", "").replace("k", "").strip())
+            forecast_val = float(forecast.replace("%", "").replace("k", "").strip())
+        except:
+            return "⚖️ Neutral", discord.Color.orange()
+
+        title = event["title"].lower()
+        if any(k in title for k in NEGATIVE_GOOD_KEYWORDS):
+            if actual_val < forecast_val:
+                return "✅ Positiv", discord.Color.green()
+            elif actual_val > forecast_val:
+                return "❌ Negativ", discord.Color.red()
+        elif any(k in title for k in POSITIVE_GOOD_KEYWORDS):
+            if actual_val > forecast_val:
+                return "✅ Positiv", discord.Color.green()
+            elif actual_val < forecast_val:
+                return "❌ Negativ", discord.Color.red()
+
+        return "⚖️ Neutral", discord.Color.orange()
+
     for event in events:
         identifier = (event['title'], event['date'], event['country'])
 
         if event['actual'] and identifier not in posted_events:
-            emoji = {
+            flag = {
                 'germany': '🇩🇪',
                 'united states': '🇺🇸'
             }.get(event['country'].lower(), '🌍')
 
+            bewertung, farbe = interpret_event(event)
+
             embed = discord.Embed(
-                title=f"✅ Zahlen veröffentlicht: {event['title']} ({emoji})",
-                color=discord.Color.green()
+                title=f"{bewertung} Zahlen veröffentlicht: {event['title']} ({flag})",
+                color=farbe
             )
             embed.add_field(name="Ergebnis", value=event['actual'], inline=True)
             embed.add_field(name="Prognose", value=event['forecast'], inline=True)
