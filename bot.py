@@ -50,6 +50,29 @@ def extract_macro_event_time(title, country):
     return "14:30" if country == "united states" else "08:00"
 
 
+### requirements.txt
+
+discord.py==2.3.2
+apscheduler==3.10.4
+python-dotenv==1.0.1
+requests
+beautifulsoup4
+lxml
+
+
+### posted_events.json
+
+[]
+
+
+### .env (Beispiel)
+
+DISCORD_TOKEN=dein_bot_token
+GUILD_ID=123456789012345678
+DISCORD_CHANNEL_ID_EVENTS=123456789012345678
+DISCORD_CHANNEL_ID_CONTROL=123456789012345678
+
+
 ### calendar_utils.py
 
 import json
