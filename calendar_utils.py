@@ -34,6 +34,7 @@ def get_investing_calendar(for_tomorrow=False, backtest=False):
             'actual': '6.3%' if backtest else '',
             'forecast': '6.1%',
             'previous': '6.5%',
+            'importance': 3
         },
         {
             'title': 'Non-Farm Payrolls',
@@ -42,8 +43,22 @@ def get_investing_calendar(for_tomorrow=False, backtest=False):
             'actual': '190k' if backtest else '',
             'forecast': '180k',
             'previous': '175k',
+            'importance': 2
+        },
+        {
+            'title': 'Test-Event Unwichtig',
+            'country': 'germany',
+            'time': '11:00',
+            'actual': '',
+            'forecast': '1.0%',
+            'previous': '1.1%',
+            'importance': 1  # wird herausgefiltert
         }
     ]
+
+    # 🔍 Nur Events mit 2 oder mehr Sternen
+    dummy_data = [e for e in dummy_data if e.get('importance', 1) >= 2]
+
     target_date = date.today() + timedelta(days=1 if for_tomorrow else 0)
     date_str = target_date.strftime("%d.%m.%Y")
 
@@ -81,8 +96,9 @@ async def post_today_events(bot, channel_id, test_mode=False):
 
         if test_mode or identifier not in posted_events:
             emoji = flag_map.get(event['country'].lower(), '🌍')
-            warn = " 🚨" if any(kw in event['title'].lower() for kw in ["zins", "entscheidung", "arbeitslosen", "inflation"]) else ""
-            name = f"{emoji} {event['time']} – {event['title']}{warn}"
+            stars = "⭐" * event.get("importance", 1)
+            warn = " 🚨" if event.get("importance", 0) == 3 else ""
+            name = f"{emoji} {event['time']} – {event['title']} {stars}{warn}"
             value = f"🔹 Prognose: {event['forecast']} | 🔸 Vorher: {event['previous']}"
             embed.add_field(name=name, value=value, inline=False)
 
