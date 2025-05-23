@@ -25,13 +25,13 @@ def add_posted_event(identifier):
     posted_events.add(identifier)
     save_posted(posted_events)
 
-def get_investing_calendar(for_tomorrow=False):
+def get_investing_calendar(for_tomorrow=False, backtest=False):
     dummy_data = [
         {
             'title': 'Verbraucherpreisindex (VPI)',
             'country': 'germany',
             'time': '08:00',
-            'actual': '',
+            'actual': '6.3%' if backtest else '',
             'forecast': '6.1%',
             'previous': '6.5%',
         },
@@ -39,7 +39,7 @@ def get_investing_calendar(for_tomorrow=False):
             'title': 'Non-Farm Payrolls',
             'country': 'united states',
             'time': '14:30',
-            'actual': '',
+            'actual': '190k' if backtest else '',
             'forecast': '180k',
             'previous': '175k',
         }
@@ -82,7 +82,6 @@ async def post_today_events(bot, channel_id, test_mode=False):
         if test_mode or identifier not in posted_events:
             emoji = flag_map.get(event['country'].lower(), '🌍')
             warn = " 🚨" if any(kw in event['title'].lower() for kw in ["zins", "entscheidung", "arbeitslosen", "inflation"]) else ""
-
             name = f"{emoji} {event['time']} – {event['title']}{warn}"
             value = f"🔹 Prognose: {event['forecast']} | 🔸 Vorher: {event['previous']}"
             embed.add_field(name=name, value=value, inline=False)
@@ -94,8 +93,8 @@ async def post_today_events(bot, channel_id, test_mode=False):
         channel = bot.get_channel(channel_id)
         await channel.send(embed=embed)
 
-async def check_for_actual_updates(bot, channel_id):
-    events = get_investing_calendar()
+async def check_for_actual_updates(bot, channel_id, backtest=False):
+    events = get_investing_calendar(backtest=backtest)
     channel = bot.get_channel(channel_id)
 
     NEGATIVE_GOOD_KEYWORDS = ["inflation", "arbeitslosen", "vpi", "verbraucherpreisindex"]
@@ -104,7 +103,6 @@ async def check_for_actual_updates(bot, channel_id):
     def interpret_event(event):
         actual = event["actual"]
         forecast = event["forecast"]
-
         try:
             actual_val = float(actual.replace("%", "").replace("k", "").strip())
             forecast_val = float(forecast.replace("%", "").replace("k", "").strip())
@@ -128,7 +126,7 @@ async def check_for_actual_updates(bot, channel_id):
     for event in events:
         identifier = (event['title'], event['date'], event['country'])
 
-        if event['actual'] and identifier not in posted_events:
+        if event['actual'] and (backtest or identifier not in posted_events):
             flag = {
                 'germany': '🇩🇪',
                 'united states': '🇺🇸'
@@ -145,4 +143,5 @@ async def check_for_actual_updates(bot, channel_id):
             embed.add_field(name="Vorher", value=event['previous'], inline=True)
 
             await channel.send(embed=embed)
-            add_posted_event(identifier)
+            if not backtest:
+                add_posted_event(identifier)
