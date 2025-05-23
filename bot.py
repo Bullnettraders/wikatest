@@ -3,6 +3,7 @@ from discord.ext import commands
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 import os
+import asyncio
 from calendar_utils import post_today_events, check_for_actual_updates
 
 load_dotenv()
@@ -20,8 +21,8 @@ scheduler = AsyncIOScheduler()
 @bot.event
 async def on_ready():
     print(f"✅ Bot ist online als {bot.user}")
-    scheduler.add_job(lambda: post_today_events(bot, CHANNEL_EVENTS), 'cron', hour=0, minute=0)
-    scheduler.add_job(lambda: check_for_actual_updates(bot, CHANNEL_EVENTS), 'interval', seconds=60)
+    scheduler.add_job(lambda: asyncio.create_task(post_today_events(bot, CHANNEL_EVENTS)), 'cron', hour=0, minute=0)
+    scheduler.add_job(lambda: asyncio.create_task(check_for_actual_updates(bot, CHANNEL_EVENTS)), 'interval', seconds=60)
     scheduler.start()
     try:
         await bot.tree.sync(guild=discord.Object(id=GUILD_ID))
