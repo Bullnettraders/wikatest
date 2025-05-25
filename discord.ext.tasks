@@ -1,26 +1,158 @@
-from discord.ext import commands, tasks
+# bot_tasks.py
+import json
+import os
+from datetime import datetime, timedelta
+import discord
+from discord.ext import tasks, commands
+import requests
+from bs4 import BeautifulSoup
 
-bot = commands.Bot(command_prefix="!")
-CHANNEL_EVENTS = 1234567890  # deine Channel-ID
+# ----------------- Konfiguration -----------------
+TOKEN = "DEIN_DISCORD_BOT_TOKEN"
+CHANNEL_EVENTS = 123456789012345678  # hier deine Channel-ID eintragen
+POSTED_EVENTS_FILE = "posted_events.json"
+# --------------------------------------------------
+
+# posted_events.json anlegen, falls nicht vorhanden
+if not os.path.exists(POSTED_EVENTS_FILE):
+    with open(POSTED_EVENTS_FILE, "w") as f:
+        json.dump([], f)
+
+def load_posted():
+    with open(POSTED_EVENTS_FILE, "r") as f:
+        return set(tuple(x) for x in json.load(f))
+
+def save_posted(posted_events):
+    with open(POSTED_EVENTS_FILE, "w") as f:
+        json.dump(list(posted_events), f)
+
+posted_events = load_posted()
+
+def add_posted_event(identifier):
+    posted_events.add(identifier)
+    save_posted(posted_events)
+
+def get_investing_calendar(for_tomorrow=False):
+    target_date = datetime.today() + timedelta(days=1 if for_tomorrow else 0)
+    url = f"https://www.investing.com/economic-calendar/{target_date.strftime('%Y-%m-%d')}"
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Accept-Language": "de-DE,de;q=0.9"
+    }
+    resp = requests.get(url, headers=headers)
+    soup = BeautifulSoup(resp.text, "lxml")
+    table = soup.find("table", id="economicCalendarData")
+    if not table:
+        return []
+
+    events = []
+    for row in table.select("tr.js-event-item"):
+        time     = row.select_one("td[data-test='event-time']").get_text(strip=True)
+        country  = row.select_one("td[data-test='event-country']").get_text(strip=True).lower()
+        title    = row.select_one("td[data-test='event-name']").get_text(strip=True)
+        importance = len(row.select(".grayFullBullishIcon"))
+        if importance < 2:
+            continue
+
+        prev    = row.select_one("td[data-test='event-previous']").get_text(strip=True) or ""
+        fcst    = row.select_one("td[data-test='event-forecast']").get_text(strip=True) or ""
+        actual  = row.select_one("td[data-test='event-actual']").get_text(strip=True) or ""
+
+        events.append({
+            "date":       target_date.strftime("%d.%m.%Y"),
+            "time":       time,
+            "country":    country,
+            "title":      title,
+            "importance": importance,
+            "previous":   prev,
+            "forecast":   fcst,
+            "actual":     actual,
+        })
+    return events
+
+async def post_today_events():
+    events = get_investing_calendar()
+    events.sort(key=lambda e: e['time'])
+    if not events:
+        return
+
+    embed = discord.Embed(
+        title=f"📅 Wirtschaftstermine ({events[0]['date']})",
+        color=discord.Color.blue()
+    )
+    flag_map = {'germany': '🇩🇪', 'united states': '🇺🇸'}
+    for ev in events:
+        ident = (ev['title'], ev['date'], ev['country'])
+        if ident not in posted_events:
+            emoji = flag_map.get(ev['country'], '🌍')
+            stars = "⭐" * ev['importance']
+            warn  = " 🚨" if ev['importance'] == 3 else ""
+            name  = f"{emoji} {ev['time']} – {ev['title']} {stars}{warn}"
+            val   = f"🔹 Prognose: {ev['forecast'] or '–'} | 🔸 Vorher: {ev['previous'] or '–'}"
+            embed.add_field(name=name, value=val, inline=False)
+            add_posted_event(ident)
+
+    channel = bot.get_channel(CHANNEL_EVENTS)
+    await channel.send(embed=embed)
+
+async def check_for_actual_updates():
+    events = get_investing_calendar()
+    flag_map = {'germany': '🇩🇪', 'united states': '🇺🇸'}
+    NEG = ["inflation", "arbeitslosen", "vpi", "verbraucherpreisindex"]
+    POS = ["payroll", "bip", "beschäftigung", "wachstum"]
+
+    for ev in events:
+        if not ev['actual']:
+            continue
+        ident = (ev['title'], ev['date'], ev['country'])
+        if ident in posted_events:
+            continue
+
+        # Interpretation
+        try:
+            a = float(ev['actual'].replace("%","").replace("k",""))
+            f = float(ev['forecast'].replace("%","").replace("k",""))
+        except:
+            label, color = "⚖️ Neutral", discord.Color.orange()
+        else:
+            t = ev['title'].lower()
+            if any(k in t for k in NEG):
+                label, color = ("✅ Positiv", discord.Color.green()) if a < f else ("❌ Negativ", discord.Color.red())
+            elif any(k in t for k in POS):
+                label, color = ("✅ Positiv", discord.Color.green()) if a > f else ("❌ Negativ", discord.Color.red())
+            else:
+                label, color = "⚖️ Neutral", discord.Color.orange()
+
+        embed = discord.Embed(
+            title=f"{label} Zahlen veröffentlicht: {ev['title']} ({flag_map.get(ev['country'],'🌍')})",
+            color=color
+        )
+        embed.add_field(name="Ergebnis",   value=ev['actual'],   inline=True)
+        embed.add_field(name="Prognose",   value=ev['forecast'], inline=True)
+        embed.add_field(name="Vorher",     value=ev['previous'], inline=True)
+
+        channel = bot.get_channel(CHANNEL_EVENTS)
+        await channel.send(embed=embed)
+        add_posted_event(ident)
+
+# ----- Bot-Setup -----
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"✅ Eingeloggt als {bot.user}")
     if not actual_updates_task.is_running():
         actual_updates_task.start()
-
-@tasks.loop(seconds=60)
-async def actual_updates_task():
-    await check_for_actual_updates(bot, CHANNEL_EVENTS)
-
-# falls Du auch die Tages-Events jede 5 Minuten posten willst:
-@tasks.loop(minutes=5)
-async def daily_events_task():
-    await post_today_events(bot, CHANNEL_EVENTS)
-
-@bot.event
-async def on_ready():
     if not daily_events_task.is_running():
         daily_events_task.start()
 
-bot.run("DEIN_TOKEN")
+@tasks.loop(seconds=60)
+async def actual_updates_task():
+    await check_for_actual_updates()
+
+@tasks.loop(minutes=5)
+async def daily_events_task():
+    await post_today_events()
+
+bot.run(TOKEN)
