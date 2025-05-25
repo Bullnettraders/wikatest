@@ -2,17 +2,17 @@ import json
 import os
 from datetime import datetime, timedelta
 import discord
+from discord.ext import tasks, commands
 import requests
 from bs4 import BeautifulSoup
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # === Konfiguration ===
 TOKEN = "DEIN_DISCORD_BOT_TOKEN"
-CHANNEL_EVENTS = 123456789012345678
+CHANNEL_EVENTS = 123456789012345678  # deine Channel-ID
 POSTED_EVENTS_FILE = "posted_events.json"
-# =====================
+# ======================
 
-# Datei initialisieren
+# Stelle sicher, dass die Datei existiert
 if not os.path.exists(POSTED_EVENTS_FILE):
     with open(POSTED_EVENTS_FILE, "w") as f:
         json.dump([], f)
@@ -26,6 +26,7 @@ def save_posted(posted):
         json.dump(list(posted), f)
 
 posted_events = load_posted()
+
 def add_posted(ident):
     posted_events.add(ident)
     save_posted(posted_events)
@@ -36,35 +37,65 @@ def get_investing_calendar():
     headers = {"User-Agent":"Mozilla/5.0","Accept-Language":"de-DE,en;q=0.9"}
     resp = requests.get(url, headers=headers)
     soup = BeautifulSoup(resp.text, "lxml")
-    tbl = soup.find("table", id="economicCalendarData")
-    if not tbl: return []
-    evs = []
-    for row in tbl.select("tr.js-event-item"):
-        imp = len(row.select(".grayFullBullishIcon"))
-        if imp < 2: continue
-        time   = row.select_one("td[data-test='event-time']").get_text(strip=True)
-        country= row.select_one("td[data-test='event-country']").get_text(strip=True).lower()
-        name   = row.select_one("td[data-test='event-name']").get_text(strip=True)
-        prev   = row.select_one("td[data-test='event-previous']").get_text(strip=True) or ""
-        fcst   = row.select_one("td[data-test='event-forecast']").get_text(strip=True) or ""
-        actual = row.select_one("td[data-test='event-actual']").get_text(strip=True) or ""
-        evs.append({
-            "id":     (name, today.strftime("%d.%m.%Y"), country),
-            "time":   time, "country": country, "title": name,
-            "importance": imp, "previous": prev, "forecast": fcst, "actual": actual
-        })
-    return evs
+    table = soup.find("table", id="economicCalendarData")
+    if not table:
+        return []
 
-async def post_today_events(bot):
+    events = []
+    for row in table.select("tr.js-event-item"):
+        imp = len(row.select(".grayFullBullishIcon"))
+        if imp < 2:
+            continue
+
+        time    = row.select_one("td[data-test='event-time']").get_text(strip=True)
+        country = row.select_one("td[data-test='event-country']").get_text(strip=True).lower()
+        title   = row.select_one("td[data-test='event-name']").get_text(strip=True)
+        prev    = row.select_one("td[data-test='event-previous']").get_text(strip=True) or ""
+        fcst    = row.select_one("td[data-test='event-forecast']").get_text(strip=True) or ""
+        actual  = row.select_one("td[data-test='event-actual']").get_text(strip=True) or ""
+
+        events.append({
+            "id":        (title, today.strftime("%d.%m.%Y"), country),
+            "date":      today.strftime("%d.%m.%Y"),
+            "time":      time,
+            "country":   country,
+            "title":     title,
+            "importance":imp,
+            "previous":  prev,
+            "forecast":  fcst,
+            "actual":    actual,
+        })
+    return events
+
+# ===== Bot-Setup =====
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"✅ Eingeloggt als {bot.user}")
+    # Starte die Loops nur einmal
+    if not daily_events.is_running():
+        daily_events.start()
+    if not actual_updates.is_running():
+        actual_updates.start()
+
+# ===== Tasks =====
+@tasks.loop(minutes=5)
+async def daily_events():
+    """Postet alle 5 Minuten die heutigen Wirtschaftstermine."""
     events = sorted(get_investing_calendar(), key=lambda e: e["time"])
-    if not events: return
+    if not events:
+        return
+
     embed = discord.Embed(
-        title=f"📅 Wirtschaftstermine ({events[0]['id'][1]})",
+        title=f"📅 Wirtschaftstermine ({events[0]['date']})",
         color=discord.Color.blue()
     )
     flags = {"germany":"🇩🇪","united states":"🇺🇸"}
     for ev in events:
-        if ev["id"] in posted_events: continue
+        if ev["id"] in posted_events:
+            continue
         emoji = flags.get(ev["country"], "🌍")
         stars = "⭐" * ev["importance"]
         warn  = " 🚨" if ev["importance"] == 3 else ""
@@ -72,17 +103,22 @@ async def post_today_events(bot):
         val   = f"🔹 Prognose: {ev['forecast'] or '–'} | 🔸 Vorher: {ev['previous'] or '–'}"
         embed.add_field(name=name, value=val, inline=False)
         add_posted(ev["id"])
-    ch = bot.get_channel(CHANNEL_EVENTS)
-    await ch.send(embed=embed)
 
-async def check_for_actual_updates(bot):
+    channel = bot.get_channel(CHANNEL_EVENTS)
+    await channel.send(embed=embed)
+
+@tasks.loop(seconds=60)
+async def actual_updates():
+    """Checkt jede Minute auf veröffentlichte Actual-Werte."""
     events = get_investing_calendar()
     flags = {"germany":"🇩🇪","united states":"🇺🇸"}
     NEG = ["inflation","arbeitslosen","vpi","verbraucherpreisindex"]
     POS = ["payroll","bip","beschäftigung","wachstum"]
+
     for ev in events:
         if not ev["actual"] or ev["id"] in posted_events:
             continue
+
         # Werte parsen
         try:
             a = float(ev["actual"].replace("%","").replace("k",""))
@@ -105,22 +141,10 @@ async def check_for_actual_updates(bot):
         embed.add_field(name="Ergebnis", value=ev["actual"], inline=True)
         embed.add_field(name="Prognose", value=ev["forecast"], inline=True)
         embed.add_field(name="Vorher", value=ev["previous"], inline=True)
-        ch = bot.get_channel(CHANNEL_EVENTS)
-        await ch.send(embed=embed)
+
+        channel = bot.get_channel(CHANNEL_EVENTS)
+        await channel.send(embed=embed)
         add_posted(ev["id"])
 
-# --- Bot & Scheduler Setup ---
-intents = discord.Intents.default()
-bot = discord.Client(intents=intents)
-
-scheduler = AsyncIOScheduler()
-# Gib hier direkt die Coroutine-Funktionen und ihre Argumente an:
-scheduler.add_job(post_today_events,       'interval', seconds=300, args=[bot], next_run_time=datetime.now())
-scheduler.add_job(check_for_actual_updates,'interval', seconds=60,  args=[bot], next_run_time=datetime.now())
-scheduler.start()
-
-@bot.event
-async def on_ready():
-    print(f"✅ Eingeloggt als {bot.user}")
-
+# ===== Start Bot =====
 bot.run(TOKEN)
