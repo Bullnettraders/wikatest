@@ -1,0 +1,26 @@
+from discord.ext import commands, tasks
+
+bot = commands.Bot(command_prefix="!")
+CHANNEL_EVENTS = 1234567890  # deine Channel-ID
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    if not actual_updates_task.is_running():
+        actual_updates_task.start()
+
+@tasks.loop(seconds=60)
+async def actual_updates_task():
+    await check_for_actual_updates(bot, CHANNEL_EVENTS)
+
+# falls Du auch die Tages-Events jede 5 Minuten posten willst:
+@tasks.loop(minutes=5)
+async def daily_events_task():
+    await post_today_events(bot, CHANNEL_EVENTS)
+
+@bot.event
+async def on_ready():
+    if not daily_events_task.is_running():
+        daily_events_task.start()
+
+bot.run("DEIN_TOKEN")
