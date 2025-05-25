@@ -26,6 +26,7 @@ def save_posted(posted):
         json.dump(list(posted), f)
 
 posted_events = load_posted()
+
 def add_posted(ident):
     posted_events.add(ident)
     save_posted(posted_events)
@@ -36,12 +37,12 @@ def get_investing_calendar():
     headers = {"User-Agent":"Mozilla/5.0","Accept-Language":"de-DE,en;q=0.9"}
     resp = requests.get(url, headers=headers)
     soup = BeautifulSoup(resp.text, "lxml")
-    tbl = soup.find("table", id="economicCalendarData")
-    if not tbl:
+    table = soup.find("table", id="economicCalendarData")
+    if not table:
         return []
 
     events = []
-    for row in tbl.select("tr.js-event-item"):
+    for row in table.select("tr.js-event-item"):
         imp = len(row.select(".grayFullBullishIcon"))
         if imp < 2:
             continue
