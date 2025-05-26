@@ -1,4 +1,3 @@
-# bot_apscheduler.py
 import json
 import os
 from datetime import datetime, timedelta
@@ -20,13 +19,16 @@ if not os.path.exists(POSTED_EVENTS_FILE):
 
 def load_posted():
     with open(POSTED_EVENTS_FILE, "r") as f:
+        # Liste von Lists (JSON) zu Set von Tuplen konvertieren
         return set(tuple(x) for x in json.load(f))
 
 def save_posted(posted_events):
     with open(POSTED_EVENTS_FILE, "w") as f:
-        json.dump(list(posted_events), f)
+        # Tuples zu Lists, dann JSON dump
+        json.dump([list(x) for x in posted_events], f)
 
 posted_events = load_posted()
+
 def add_posted_event(ident):
     posted_events.add(ident)
     save_posted(posted_events)
@@ -42,36 +44,55 @@ def get_investing_calendar(for_tomorrow=False):
         return []
     evs = []
     for row in table.select("tr.js-event-item"):
+        imp = len(row.select(".grayFullBullishIcon"))
+        if imp < 2:
+            continue
         time     = row.select_one("td[data-test='event-time']").get_text(strip=True)
         country  = row.select_one("td[data-test='event-country']").get_text(strip=True).lower()
         title    = row.select_one("td[data-test='event-name']").get_text(strip=True)
-        imp      = len(row.select(".grayFullBullishIcon"))
-        if imp < 2: continue
-        prev  = row.select_one("td[data-test='event-previous']").get_text(strip=True) or ""
-        fcst  = row.select_one("td[data-test='event-forecast']").get_text(strip=True) or ""
-        actual= row.select_one("td[data-test='event-actual']").get_text(strip=True) or ""
-        evs.append({"date":target_date.strftime("%d.%m.%Y"),
-                    "time":time,"country":country,
-                    "title":title,"importance":imp,
-                    "previous":prev,"forecast":fcst,"actual":actual})
+        prev     = row.select_one("td[data-test='event-previous']").get_text(strip=True) or ""
+        fcst     = row.select_one("td[data-test='event-forecast']").get_text(strip=True) or ""
+        actual   = row.select_one("td[data-test='event-actual']").get_text(strip=True) or ""
+        evs.append({
+            "date":      target_date.strftime("%d.%m.%Y"),
+            "time":      time,
+            "country":   country,
+            "title":     title,
+            "importance":imp,
+            "previous":  prev,
+            "forecast":  fcst,
+            "actual":    actual
+        })
     return evs
 
 async def post_today_events(bot):
     events = get_investing_calendar()
     events.sort(key=lambda e: e['time'])
-    if not events: return
-    embed = discord.Embed(title=f"📅 Wirtschaftstermine ({events[0]['date']})", color=discord.Color.blue())
-    flags = {'germany':'🇩🇪','united states':'🇺🇸'}
+    
+    # sammle nur wirklich neue Events
+    new_events = []
     for ev in events:
-        ident = (ev['title'],ev['date'],ev['country'])
+        ident = (ev['title'], ev['date'], ev['country'])
         if ident not in posted_events:
-            emoji = flags.get(ev['country'],'🌍')
-            stars = "⭐"*ev['importance']
-            warn  = " 🚨" if ev['importance']==3 else ""
-            name = f"{emoji} {ev['time']} – {ev['title']} {stars}{warn}"
-            val  = f"🔹 Prognose: {ev['forecast'] or '–'} | 🔸 Vorher: {ev['previous'] or '–'}"
-            embed.add_field(name=name, value=val, inline=False)
+            new_events.append(ev)
             add_posted_event(ident)
+    
+    if not new_events:
+        return  # nichts Neues, also kein Post
+
+    embed = discord.Embed(
+        title=f"📅 Wirtschaftstermine ({new_events[0]['date']})",
+        color=discord.Color.blue()
+    )
+    flags = {'germany':'🇩🇪','united states':'🇺🇸'}
+    for ev in new_events:
+        emoji = flags.get(ev['country'], '🌍')
+        stars = "⭐" * ev['importance']
+        warn  = " 🚨" if ev['importance'] == 3 else ""
+        name  = f"{emoji} {ev['time']} – {ev['title']} {stars}{warn}"
+        val   = f"🔹 Prognose: {ev['forecast'] or '–'} | 🔸 Vorher: {ev['previous'] or '–'}"
+        embed.add_field(name=name, value=val, inline=False)
+
     ch = bot.get_channel(CHANNEL_EVENTS)
     await ch.send(embed=embed)
 
@@ -80,10 +101,17 @@ async def check_for_actual_updates(bot):
     flags = {'germany':'🇩🇪','united states':'🇺🇸'}
     NEG = ["inflation","arbeitslosen","vpi","verbraucherpreisindex"]
     POS = ["payroll","bip","beschäftigung","wachstum"]
+
+    new_updates = []
     for ev in events:
-        if not ev['actual']: continue
-        ident = (ev['title'],ev['date'],ev['country'])
-        if ident in posted_events: continue
+        if not ev['actual']:
+            continue
+        ident = (ev['title'], ev['date'], ev['country'])
+        # nur posten, wenn dieses Ergebnis noch nicht geloggt wurde
+        if ident in posted_events:
+            continue
+
+        # Bestimme positiv/negativ
         try:
             a = float(ev['actual'].replace("%","").replace("k",""))
             f = float(ev['forecast'].replace("%","").replace("k",""))
@@ -97,24 +125,32 @@ async def check_for_actual_updates(bot):
                 label, color = ("✅ Positiv", discord.Color.green()) if a > f else ("❌ Negativ", discord.Color.red())
             else:
                 label, color = "⚖️ Neutral", discord.Color.orange()
+
+        new_updates.append((ev, label, color))
+        add_posted_event(ident)
+
+    if not new_updates:
+        return  # keine neuen Zahlen, kein Post
+
+    ch = bot.get_channel(CHANNEL_EVENTS)
+    for ev, label, color in new_updates:
         embed = discord.Embed(
             title=f"{label} Zahlen veröffentlicht: {ev['title']} ({flags.get(ev['country'],'🌍')})",
             color=color
         )
-        embed.add_field(name="Ergebnis", value=ev['actual'], inline=True)
-        embed.add_field(name="Prognose", value=ev['forecast'], inline=True)
-        embed.add_field(name="Vorher", value=ev['previous'], inline=True)
-        ch = bot.get_channel(CHANNEL_EVENTS)
+        embed.add_field(name="Ergebnis",   value=ev['actual'],   inline=True)
+        embed.add_field(name="Prognose",   value=ev['forecast'], inline=True)
+        embed.add_field(name="Vorher",     value=ev['previous'], inline=True)
         await ch.send(embed=embed)
-        add_posted_event(ident)
 
 # ----- Bot und Scheduler -----
 intents = discord.Intents.default()
 bot = discord.Client(intents=intents)
 
 scheduler = AsyncIOScheduler()
-# jeden 60s-Job
-scheduler.add_job(post_today_events,    'interval', seconds=300, args=[bot], next_run_time=datetime.now())
+# Termine einmal alle 5 Minuten prüfen, aber nur posten, wenn neu
+scheduler.add_job(post_today_events, 'interval', seconds=300, args=[bot], next_run_time=datetime.now())
+# Zahlen alle Minute prüfen, aber nur posten, wenn neue actual-Werte da sind
 scheduler.add_job(check_for_actual_updates, 'interval', seconds=60, args=[bot], next_run_time=datetime.now())
 scheduler.start()
 
